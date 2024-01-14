@@ -1,0 +1,68 @@
+version: "3.9"
+
+networks:
+  back:
+    driver: bridge
+
+volumes:
+  build_output:
+
+services:
+  postgres:
+    restart: always
+    image: postgres:15.2
+    command: "postgres -p 5444"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ~/incident_volume:/docker-entrypoint-initdb.d
+      - ~/incident_volume:/var/lib/postgresql/data
+    ports:
+      - "5444:5444"
+    networks:
+      - back
+
+  nginx:
+    restart: always
+    image: nginx:alpine3.17
+    ports:
+      - "81:80"
+    volumes:
+      - build_output:/var/www/html
+      - ./cfg/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./cfg/nginx/sites:/etc/nginx/sites-available
+    networks:
+      - back
+    depends_on:
+      - frontend
+
+  frontend:
+    image: kubalovpasha/incident-front
+    volumes:
+      - build_output:/app/dist
+    environment:
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL}
+    networks:
+      - back
+    depends_on:
+      - backend
+
+  backend:
+    image: kubalovpasha/incident-back
+    restart: always
+    ports:
+      - "8889:8888"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - PASETO_KEY=${PASETO_KEY}
+      - PASETO_REFRESH_KEY=${PASETO_REFRESH_KEY}
+    networks:
+      - back
+    depends_on:
+      - postgres
